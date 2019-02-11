@@ -2,6 +2,8 @@
 const http = require('http')
 const url = require('url')
 const stringDecoder = require('string_decoder').StringDecoder
+let config = require('./config')
+
 
 //The server's response to requests
 const server = http.createServer( (req, res) => {
@@ -36,12 +38,39 @@ const server = http.createServer( (req, res) => {
 
     req.on('end', () => {
         buffer += decoder.end()
+        console.log(buffer)
+        //Choosing the handle
+        let chosenHandler = typeof(router[trimmedPath]) == 'undefined' ? handlers.notFound : handlers.sample
 
-        //Send the response
-        res.end('The server is actively responding!\n')
+        //Construct the data object to be sent to the handler
+        let data = {
+            'trimmedPath' : trimmedPath,
+            'queryStringObject' : queryStringObject,
+            'method' : method,
+            'headers' : headers,
+            'payload' : buffer
+        }
 
-        //Log the request path
-        console.log('Received payloads: ', buffer)
+        //Route the request to the handler in router
+        chosenHandler(data, (statusCode, payload) => {
+            //Default status code is 200
+            statusCode = typeof(statusCode) == 'number' ? statusCode : 200
+            //Default payload is null
+            payload = typeof(payload) == 'object' ? payload : {}
+
+            //Convert the payload to a string
+            let payloadString = JSON.stringify(payload)
+
+            //Send the response
+            res.setHeader('content-type', 'application/json')
+            res.writeHead(statusCode)
+
+            res.end(payloadString, '\n'  )
+
+            //Log the request path
+            console.log('Received responses: ', statusCode, payloadString)
+            console.log(payloadString)
+        })     
         //console.log('Request received on path: ' + trimmedPath + ' with method ' + method + ' and query string object parameters', queryStringObject, 'and a header ', headers)
     
     })
@@ -50,8 +79,27 @@ const server = http.createServer( (req, res) => {
 })
 
 //The server listens to port 8000($PORT)
-const PORT = 8000
-server.listen(PORT, () => {
-    console.log('The server is listening to port ' + PORT)
+
+server.listen(config.port, () => {
+    console.log('The server is listening to port ' + config.port + ' in ' + config.envName + ' mode')
 })
 
+//Defining handlers
+let handlers = {}
+
+//Sample handler
+handlers.sample = (data, callback) => {
+    callback(406, { 'name' : 'sample handler' })
+}
+
+//Not Found Handler
+handlers.notFound = (data, callback) => {
+    //Callback an http status code and a payload object
+    callback(409)
+}
+
+
+//Creating a router
+let router = {
+    'sample' : handlers.sample
+}
